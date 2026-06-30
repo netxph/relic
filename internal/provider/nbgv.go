@@ -106,7 +106,7 @@ func nbgvGetCommits(version string) (string, error) {
 	if out == "" {
 		return "", fmt.Errorf("nbgv get-commits %s: no commits found; version.json may use a 3-part version — not supported", version)
 	}
-	return strings.SplitN(out, "\n", 2)[0], nil
+	return strings.TrimSpace(strings.SplitN(out, "\n", 2)[0]), nil
 }
 
 // findSeriesStart walks version.json git history to find the oldest commit that
