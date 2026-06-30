@@ -87,15 +87,33 @@ func nbgvGetVersion() (string, error) {
 		return "", fmt.Errorf("nbgv get-version failed: %w", err)
 	}
 	var result struct {
-		NuGetPackageVersion string
+		SimpleVersion     string
+		PrereleaseVersion string
 	}
 	if err := json.Unmarshal([]byte(out), &result); err != nil {
 		return "", fmt.Errorf("nbgv get-version: failed to parse output: %w", err)
 	}
-	if result.NuGetPackageVersion == "" {
-		return "", fmt.Errorf("nbgv get-version: NuGetPackageVersion is empty")
+	if result.SimpleVersion == "" {
+		return "", fmt.Errorf("nbgv get-version: SimpleVersion is empty")
 	}
-	return result.NuGetPackageVersion, nil
+	// PrereleaseVersion includes "-g{hash}" for non-public builds; strip it.
+	return result.SimpleVersion + stripGitHash(result.PrereleaseVersion), nil
+}
+
+// stripGitHash removes the trailing "-g{hex}" suffix nbgv appends to
+// PrereleaseVersion for non-public builds.
+// e.g. "-beta-g40e0303fa7" → "-beta", "-beta" → "-beta", "" → ""
+func stripGitHash(s string) string {
+	i := strings.LastIndex(s, "-g")
+	if i == -1 || len(s[i+2:]) == 0 {
+		return s
+	}
+	for _, c := range s[i+2:] {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+			return s // not a hex hash, leave unchanged
+		}
+	}
+	return s[:i]
 }
 
 func nbgvGetCommits(version string) (string, error) {

@@ -41,7 +41,7 @@ func TestNBGVProvider_ResolveNoVersion(t *testing.T) {
 		case "--version":
 			return "3.6.133", nil
 		case "get-version":
-			return `{"NuGetPackageVersion":"1.0.5-beta"}`, nil
+			return `{"SimpleVersion":"1.0.5","PrereleaseVersion":"-beta"}`, nil
 		}
 		return "", fmt.Errorf("unexpected: %v", args)
 	})
