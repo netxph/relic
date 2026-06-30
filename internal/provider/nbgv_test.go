@@ -27,6 +27,13 @@ func mockGitShow(t *testing.T, fn func(ref string) (string, error)) {
 	t.Cleanup(func() { execGitShow = old })
 }
 
+func mockGitParent(t *testing.T, fn func(hash string) (string, error)) {
+	t.Helper()
+	old := execGitParent
+	execGitParent = fn
+	t.Cleanup(func() { execGitParent = old })
+}
+
 // Task 6.1: no --version → resolves from nbgv get-version, To = HEAD
 func TestNBGVProvider_ResolveNoVersion(t *testing.T) {
 	mockNbgv(t, func(args ...string) (string, error) {
@@ -39,6 +46,7 @@ func TestNBGVProvider_ResolveNoVersion(t *testing.T) {
 		return "", fmt.Errorf("unexpected: %v", args)
 	})
 	mockGitLogVersionFile(t, func() (string, error) { return "", nil })
+	mockGitParent(t, func(hash string) (string, error) { return "", nil })
 
 	result, err := NBGVProvider{}.Resolve(CLIFlags{})
 	if err != nil {
@@ -66,6 +74,7 @@ func TestNBGVProvider_ResolveWithVersion(t *testing.T) {
 		return "", fmt.Errorf("unexpected: %v", args)
 	})
 	mockGitLogVersionFile(t, func() (string, error) { return "", nil })
+	mockGitParent(t, func(hash string) (string, error) { return "", nil })
 
 	result, err := NBGVProvider{}.Resolve(CLIFlags{Version: "1.0.3-beta"})
 	if err != nil {
@@ -79,7 +88,7 @@ func TestNBGVProvider_ResolveWithVersion(t *testing.T) {
 	}
 }
 
-// Task 6.3: findSeriesStart returns oldest commit in the series
+// Task 6.3: findSeriesStart returns parent of oldest commit in the series
 func TestFindSeriesStart(t *testing.T) {
 	mockGitLogVersionFile(t, func() (string, error) {
 		return "sha3\nsha2\nsha1", nil
@@ -95,14 +104,20 @@ func TestFindSeriesStart(t *testing.T) {
 		}
 		return "", fmt.Errorf("not found: %s", ref)
 	})
+	mockGitParent(t, func(hash string) (string, error) {
+		if hash == "sha2" {
+			return "sha1parent", nil // parent of oldest 1.0 commit
+		}
+		return "", nil
+	})
 
 	from, err := findSeriesStart("1.0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	// sha2 is the oldest commit in the 1.0 series (sha1 is 0.9)
-	if from != "sha2" {
-		t.Errorf("expected sha2, got %q", from)
+	// sha2 is the oldest 1.0 commit; its parent is the From boundary
+	if from != "sha1parent" {
+		t.Errorf("expected sha1parent, got %q", from)
 	}
 }
 
@@ -115,6 +130,24 @@ func TestFindSeriesStart_InitialRelease(t *testing.T) {
 	}
 	if from != "" {
 		t.Errorf("expected empty string for initial release, got %q", from)
+	}
+}
+
+func TestFindSeriesStart_NoParent(t *testing.T) {
+	mockGitLogVersionFile(t, func() (string, error) { return "sha1", nil })
+	mockGitShow(t, func(ref string) (string, error) {
+		return `{"version":"1.0-beta"}`, nil
+	})
+	mockGitParent(t, func(hash string) (string, error) {
+		return "", nil // sha1 is the first commit, no parent
+	})
+
+	from, err := findSeriesStart("1.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if from != "" {
+		t.Errorf("expected empty string when no parent, got %q", from)
 	}
 }
 

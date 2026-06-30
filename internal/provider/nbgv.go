@@ -28,6 +28,16 @@ var execGitShow = func(ref string) (string, error) {
 	return strings.TrimSpace(string(out)), err
 }
 
+// execGitParent resolves the parent SHA of a commit. Returns "", nil when the
+// commit has no parent (initial repo commit). Var allows test override.
+var execGitParent = func(hash string) (string, error) {
+	out, err := exec.Command("git", "rev-parse", "--verify", hash+"^").Output()
+	if err != nil {
+		return "", nil // no parent
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
 func (NBGVProvider) Resolve(flags CLIFlags) (ProviderResult, error) {
 	if err := checkNbgvAvailable(); err != nil {
 		return ProviderResult{}, err
@@ -100,7 +110,9 @@ func nbgvGetCommits(version string) (string, error) {
 }
 
 // findSeriesStart walks version.json git history to find the oldest commit that
-// introduced the given major.minor series. Returns "" for initial releases.
+// introduced the given major.minor series, then returns its parent SHA as the
+// From boundary — so the series-start commit itself is included in the range.
+// Returns "" for the initial commit (no parent) or no version.json history.
 // Tasks 4.1 + 4.2.
 func findSeriesStart(majorMinor string) (string, error) {
 	out, err := execGitLogVersionFile()
@@ -124,7 +136,13 @@ func findSeriesStart(majorMinor string) (string, error) {
 			break
 		}
 	}
-	return seriesStart, nil
+
+	if seriesStart == "" {
+		return "", nil
+	}
+
+	// Use the parent as From so the series-start commit is inside the range.
+	return execGitParent(seriesStart)
 }
 
 // parseMajorMinor extracts "major.minor" from either a version.json content
