@@ -1,0 +1,8 @@
+# Coding agent
+.pi/
+
+# OpenSpec
+openspec/
+
+# Build artifacts
+*.exe
