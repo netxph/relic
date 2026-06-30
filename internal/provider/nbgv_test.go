@@ -60,16 +60,16 @@ func TestNBGVProvider_ResolveNoVersion(t *testing.T) {
 	}
 }
 
-// Task 6.2: --version supplied → nbgv get-commits called with that version
+// Task 6.2: --version supplied → provider ignores it for range; always resolves from HEAD
 func TestNBGVProvider_ResolveWithVersion(t *testing.T) {
-	var gotArgs []string
+	var gotCmd string
 	mockNbgv(t, func(args ...string) (string, error) {
-		gotArgs = args
+		gotCmd = args[0]
 		switch args[0] {
 		case "--version":
 			return "3.6.133", nil
-		case "get-commits":
-			return "abc1234def5678\n", nil
+		case "get-version":
+			return `{"SimpleVersion":"1.0.5","PrereleaseVersion":"-beta"}`, nil
 		}
 		return "", fmt.Errorf("unexpected: %v", args)
 	})
@@ -80,11 +80,11 @@ func TestNBGVProvider_ResolveWithVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(gotArgs) < 2 || gotArgs[0] != "get-commits" || gotArgs[1] != "1.0.3-beta" {
-		t.Errorf("expected get-commits 1.0.3-beta, got %v", gotArgs)
+	if gotCmd == "get-commits" {
+		t.Error("expected nbgv get-commits NOT to be called")
 	}
-	if result.To == nil || *result.To != "abc1234def5678" {
-		t.Errorf("expected To=abc1234def5678, got %v", result.To)
+	if result.To == nil || *result.To != "HEAD" {
+		t.Errorf("expected To=HEAD, got %v", result.To)
 	}
 }
 

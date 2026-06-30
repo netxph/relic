@@ -43,31 +43,20 @@ func (NBGVProvider) Resolve(flags CLIFlags) (ProviderResult, error) {
 		return ProviderResult{}, err
 	}
 
-	version := flags.Version
-	toRef := "HEAD"
-
-	if version == "" {
-		v, err := nbgvGetVersion()
-		if err != nil {
-			return ProviderResult{}, err
-		}
-		version = v
-	} else {
-		sha, err := nbgvGetCommits(version)
-		if err != nil {
-			return ProviderResult{}, err
-		}
-		toRef = sha
+	v, err := nbgvGetVersion()
+	if err != nil {
+		return ProviderResult{}, err
 	}
 
-	majorMinor := parseMajorMinor(version)
+	majorMinor := parseMajorMinor(v)
 	fromRef, err := findSeriesStart(majorMinor)
 	if err != nil {
 		return ProviderResult{}, err
 	}
 
+	toRef := "HEAD"
 	return ProviderResult{
-		Version: &version,
+		Version: &v,
 		From:    &fromRef,
 		To:      &toRef,
 	}, nil

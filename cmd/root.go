@@ -69,15 +69,9 @@ func run(cmd *cobra.Command, args []string) error {
 		parsedFrom, parsedTo = parsed.From, parsed.To
 	}
 
-	// merge: CLI > provider > defaults.
-	// --version is passed to the provider as a lookup hint; if the provider
-	// resolved a version, use that for display instead of the raw flag value.
-	cliVersion := flagVersion
-	if provResult.Version != nil {
-		cliVersion = ""
-	}
+	// merge: CLI > provider > defaults
 	resolved := provider.Resolve(
-		provider.CLIFlags{Version: cliVersion, From: parsedFrom, To: parsedTo},
+		provider.CLIFlags{Version: flagVersion, From: parsedFrom, To: parsedTo},
 		provResult,
 		provider.ResolvedInput{Version: "0.0.1"},
 	)
