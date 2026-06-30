@@ -1,0 +1,11 @@
+## [{{ .Version }}] - {{ .Date }}
+{{ if .BreakingChanges }}
+### ⚠ Breaking Changes
+{{ range .BreakingChanges -}}
+{{ if .Scope }}- **{{ .Scope }}:** {{ .Description }}{{ else }}- {{ .Description }}{{ end }}{{ if .BreakingDescription }} — {{ .BreakingDescription }}{{ end }}
+{{ end }}{{ end -}}
+{{ range .Sections }}
+### {{ .Label }}
+{{ range .Commits -}}
+{{ if .Scope }}- **{{ .Scope }}:** {{ .Description }}{{ else }}- {{ .Description }}{{ end }}
+{{ end }}{{ end -}}
