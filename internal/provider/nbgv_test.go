@@ -1,0 +1,146 @@
+package provider
+
+import (
+	"fmt"
+	"testing"
+)
+
+// mockNbgv replaces execNbgv for the duration of a test.
+func mockNbgv(t *testing.T, fn func(args ...string) (string, error)) {
+	t.Helper()
+	old := execNbgv
+	execNbgv = fn
+	t.Cleanup(func() { execNbgv = old })
+}
+
+func mockGitLogVersionFile(t *testing.T, fn func() (string, error)) {
+	t.Helper()
+	old := execGitLogVersionFile
+	execGitLogVersionFile = fn
+	t.Cleanup(func() { execGitLogVersionFile = old })
+}
+
+func mockGitShow(t *testing.T, fn func(ref string) (string, error)) {
+	t.Helper()
+	old := execGitShow
+	execGitShow = fn
+	t.Cleanup(func() { execGitShow = old })
+}
+
+// Task 6.1: no --version → resolves from nbgv get-version, To = HEAD
+func TestNBGVProvider_ResolveNoVersion(t *testing.T) {
+	mockNbgv(t, func(args ...string) (string, error) {
+		switch args[0] {
+		case "--version":
+			return "3.6.133", nil
+		case "get-version":
+			return `{"NuGetPackageVersion":"1.0.5-beta"}`, nil
+		}
+		return "", fmt.Errorf("unexpected: %v", args)
+	})
+	mockGitLogVersionFile(t, func() (string, error) { return "", nil })
+
+	result, err := NBGVProvider{}.Resolve(CLIFlags{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Version == nil || *result.Version != "1.0.5-beta" {
+		t.Errorf("expected Version=1.0.5-beta, got %v", result.Version)
+	}
+	if result.To == nil || *result.To != "HEAD" {
+		t.Errorf("expected To=HEAD, got %v", result.To)
+	}
+}
+
+// Task 6.2: --version supplied → nbgv get-commits called with that version
+func TestNBGVProvider_ResolveWithVersion(t *testing.T) {
+	var gotArgs []string
+	mockNbgv(t, func(args ...string) (string, error) {
+		gotArgs = args
+		switch args[0] {
+		case "--version":
+			return "3.6.133", nil
+		case "get-commits":
+			return "abc1234def5678\n", nil
+		}
+		return "", fmt.Errorf("unexpected: %v", args)
+	})
+	mockGitLogVersionFile(t, func() (string, error) { return "", nil })
+
+	result, err := NBGVProvider{}.Resolve(CLIFlags{Version: "1.0.3-beta"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(gotArgs) < 2 || gotArgs[0] != "get-commits" || gotArgs[1] != "1.0.3-beta" {
+		t.Errorf("expected get-commits 1.0.3-beta, got %v", gotArgs)
+	}
+	if result.To == nil || *result.To != "abc1234def5678" {
+		t.Errorf("expected To=abc1234def5678, got %v", result.To)
+	}
+}
+
+// Task 6.3: findSeriesStart returns oldest commit in the series
+func TestFindSeriesStart(t *testing.T) {
+	mockGitLogVersionFile(t, func() (string, error) {
+		return "sha3\nsha2\nsha1", nil
+	})
+	contents := map[string]string{
+		"sha3:version.json": `{"version":"1.0-beta"}`,
+		"sha2:version.json": `{"version":"1.0-beta"}`,
+		"sha1:version.json": `{"version":"0.9-beta"}`,
+	}
+	mockGitShow(t, func(ref string) (string, error) {
+		if c, ok := contents[ref]; ok {
+			return c, nil
+		}
+		return "", fmt.Errorf("not found: %s", ref)
+	})
+
+	from, err := findSeriesStart("1.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// sha2 is the oldest commit in the 1.0 series (sha1 is 0.9)
+	if from != "sha2" {
+		t.Errorf("expected sha2, got %q", from)
+	}
+}
+
+func TestFindSeriesStart_InitialRelease(t *testing.T) {
+	mockGitLogVersionFile(t, func() (string, error) { return "", nil })
+
+	from, err := findSeriesStart("1.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if from != "" {
+		t.Errorf("expected empty string for initial release, got %q", from)
+	}
+}
+
+func TestParseMajorMinor(t *testing.T) {
+	cases := []struct{ input, want string }{
+		{`{"version":"1.0-beta"}`, "1.0"},
+		{`{"version":"1.0"}`, "1.0"},
+		{"1.0.3-beta", "1.0"},
+		{"1.0-beta", "1.0"},
+		{"1.1", "1.1"},
+	}
+	for _, c := range cases {
+		got := parseMajorMinor(c.input)
+		if got != c.want {
+			t.Errorf("parseMajorMinor(%q) = %q, want %q", c.input, got, c.want)
+		}
+	}
+}
+
+// Task 6.5: Get("nbgv") returns NBGVProvider
+func TestGetNBGVProvider(t *testing.T) {
+	p, err := Get("nbgv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := p.(NBGVProvider); !ok {
+		t.Errorf("expected NBGVProvider, got %T", p)
+	}
+}

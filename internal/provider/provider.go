@@ -10,7 +10,7 @@ type ProviderResult struct {
 
 // Provider resolves optional version and range values from an external source.
 type Provider interface {
-	Resolve() (ProviderResult, error)
+	Resolve(flags CLIFlags) (ProviderResult, error)
 }
 
 // ResolvedInput holds the final, fully-merged values passed to the core engine.

@@ -12,13 +12,19 @@ const fieldSep = "---FIELD---"
 // ExecGitClient runs git via os/exec with no shell interpolation.
 type ExecGitClient struct{}
 
-// Log returns commits in [from..to].
+// Log returns commits in [from..to]. If from is empty, logs all commits up to to.
 func (c ExecGitClient) Log(from, to string) ([]RawCommit, error) {
-	rangeArg := from + ".." + to
 	format := "%H" + fieldSep + "%s" + fieldSep + "%b" + logSep
-	out, err := exec.Command("git", "log", "--format="+format, rangeArg).Output()
+	var out []byte
+	var err error
+	if from == "" {
+		out, err = exec.Command("git", "log", "--format="+format, to).Output()
+	} else {
+		rangeArg := from + ".." + to
+		out, err = exec.Command("git", "log", "--format="+format, rangeArg).Output()
+	}
 	if err != nil {
-		return nil, fmt.Errorf("git log failed for range %s: %w", rangeArg, err)
+		return nil, fmt.Errorf("git log failed: %w", err)
 	}
 	return parseRawOutput(string(out)), nil
 }
