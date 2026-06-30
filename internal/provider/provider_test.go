@@ -34,8 +34,17 @@ func TestResolve_DefaultAppliedWhenBothEmpty(t *testing.T) {
 	}
 }
 
+func TestResolve_ProviderFillsRange(t *testing.T) {
+	flags := CLIFlags{} // no range from CLI
+	result := ProviderResult{From: strPtr("sha1abc"), To: strPtr("sha2def")}
+	out := Resolve(flags, result, ResolvedInput{})
+	if out.From != "sha1abc" || out.To != "sha2def" {
+		t.Errorf("expected From=sha1abc To=sha2def, got From=%s To=%s", out.From, out.To)
+	}
+}
+
 func TestGet_UnknownProvider(t *testing.T) {
-	_, err := Get("nbgv")
+	_, err := Get("unknown-provider")
 	if err == nil {
 		t.Fatal("expected error for unknown provider")
 	}
@@ -49,7 +58,7 @@ func TestGet_ManualProvider(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := p.Resolve()
+	result, err := p.Resolve(CLIFlags{})
 	if err != nil {
 		t.Fatal(err)
 	}

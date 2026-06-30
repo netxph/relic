@@ -31,7 +31,7 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.Flags().StringVar(&flagRange, "range", "", "Commit range: <hash> or <hash>..<hash> (required)")
-	rootCmd.Flags().StringVar(&flagVersion, "version", "0.0.1", "Version string to embed in release notes")
+	rootCmd.Flags().StringVar(&flagVersion, "version", "", "Version string to embed in release notes")
 	rootCmd.Flags().StringVar(&flagProvider, "provider", "manual", "Provider to use for version/range resolution")
 	rootCmd.Flags().StringVar(&flagFormat, "format", "markdown", "Output format: markdown or json")
 	rootCmd.Flags().StringVar(&flagTemplate, "template", "", "Path to a custom Go text/template file")
@@ -44,30 +44,34 @@ func run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// 8.7 --range required
-	if flagRange == "" {
-		return fmt.Errorf("--range is required")
-	}
-
 	// 8.1 resolve provider
 	p, err := provider.Get(flagProvider)
 	if err != nil {
 		return err
 	}
-	provResult, err := p.Resolve()
+	provResult, err := p.Resolve(provider.CLIFlags{Version: flagVersion})
 	if err != nil {
 		return err
 	}
 
-	// 8.3 parse range
-	parsed, err := igit.ParseRange(flagRange)
-	if err != nil {
-		return err
+	// 8.7 --range required only when provider did not fill From/To
+	if flagRange == "" && (provResult.From == nil || provResult.To == nil) {
+		return fmt.Errorf("--range is required")
+	}
+
+	// 8.3 parse range if provided
+	var parsedFrom, parsedTo string
+	if flagRange != "" {
+		parsed, err := igit.ParseRange(flagRange)
+		if err != nil {
+			return err
+		}
+		parsedFrom, parsedTo = parsed.From, parsed.To
 	}
 
 	// merge: CLI > provider > defaults
 	resolved := provider.Resolve(
-		provider.CLIFlags{Version: flagVersion, From: parsed.From, To: parsed.To},
+		provider.CLIFlags{Version: flagVersion, From: parsedFrom, To: parsedTo},
 		provResult,
 		provider.ResolvedInput{Version: "0.0.1"},
 	)
